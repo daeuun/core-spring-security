@@ -2,6 +2,7 @@ package io.security.basicsecurity.configuration;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
@@ -23,64 +24,24 @@ import java.io.IOException;
 @EnableWebSecurity
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication().withUser("user").password("{noop}1111").roles("USER");
+        auth.inMemoryAuthentication().withUser("sys").password("{noop}1111").roles("SYS","USER");
+        auth.inMemoryAuthentication().withUser("admin").password("{noop}1111").roles("ADMIN","SYS","USER");
+    }
+
     @Autowired
     UserDetailsService userDetailsService;
 
     protected void configure(HttpSecurity http) throws Exception {
         http
                 .authorizeRequests()
-                .anyRequest().authenticated(); // 인가 정책
+                .antMatchers("/user").hasRole("USER")
+                .antMatchers("/admin/pay").hasRole("ADMIN") // 구체적인 범위가 먼저 와야함
+                .antMatchers("/admin/**").access("hasRole('ADMIN') or hasRole('SYS')")
+                .anyRequest().authenticated();
         http
-                .formLogin() // 인증 정책
-                .loginPage("/loginPage")
-                .usernameParameter("userId")
-                .passwordParameter("pwd")
-                .defaultSuccessUrl("/")
-                .failureUrl("/login")
-                .loginProcessingUrl("/login_proc")
-                .successHandler(new AuthenticationSuccessHandler() {
-                    @Override
-                    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-                        System.out.println("authentication: " + authentication.getName());
-                        response.sendRedirect("/");
-                    }
-                })
-                .failureHandler(new AuthenticationFailureHandler() {
-                    @Override
-                    public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException, ServletException {
-                        System.out.println("exception: " + exception.getMessage());
-                        response.sendRedirect("/login");
-                    }
-                })
-                .permitAll();
-        http
-                .logout()
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login")
-                .addLogoutHandler(new LogoutHandler() {
-                    @Override
-                    public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-                        HttpSession session = request.getSession();
-                        session.invalidate();
-                    }
-                })
-                .logoutSuccessHandler(new LogoutSuccessHandler() {
-                    @Override
-                    public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-                        response.sendRedirect("/login");
-                    }
-                })
-        .and()
-                .rememberMe()
-                .rememberMeParameter("remember")
-                .tokenValiditySeconds(3600)
-                .userDetailsService(userDetailsService);
-        http
-                .sessionManagement()
-                .sessionFixation().changeSessionId() //세션 고정 보호
-                .maximumSessions(1)
-                .maxSessionsPreventsLogin(false) //동시 세션 접근
-
-        ;
+                .formLogin();
     }
 }
